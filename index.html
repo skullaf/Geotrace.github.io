@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoTrace — IP Geolocation</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAACeUlEQVR4nMVVS7LiMAyUZRlT7DgQ1+cwLGER4p9m0Q+NSZxAvZqq0YJKiCy1WlKbqDPnHG3Yrz/x1rd/Zf81gfdeRL6J4r3f+iQ9g3hWVfuztcbMqrrjgwSttc9A7IxzbtE6Zl7DhM9+k51zzgACSP8PzPAiTa21tWY+VtM4Qe8kIqqqqt77nDPOAAQzIwHSt5fBYRj95+wCNcDiFc+WVVWRBv6wWis+fUURnvuy0GELjTbUWvs0KGVYh3NOhsmRhplxkplFhJntHyIqpahqrdV7/6EIhOt/0Q9QbNFrrc65w+FAROhQKcXaAK6+qgCEGDPoAcbmcrkw8zRN1+v1dDpZJniCuoWJe599I4eIADbGmFJCJhGZpul2u8UYSykYAXAF9gYUDVlD6NZaCAE1xRhFZJ5npKy1Pp9POKeUsPCllAFF/QuWCMMOxoHLex9CyDmfz2ciut/vIQQ0CafotYP9AsL+ih2IBkD4DZVgRxhotM+y+Kyq8zyjGTaCRFRKEZHH46Gq4B1jg1qBbNiDgVzbMKAmQE4p5Zwh4KWUlBKiW9AtwRjfB8YP+mbs2YOFwwhZphjjQnSX/JrAGTnMjFky5TAyQRR1i9Zrz0+oPnoIIaUE7ABigiMith8YAWDHjNkaL6Qbp9y6AnM1yH3WXhVsHNZiQ0SHw2FMEXXKalxhflCTdcJuBYuYc7ZGjpvc1wR0KAVq4b236xMDCt4Wyk+v22kQerFf9ooeIPR6B51zMcbj8WhuIQTnVlvaX5P9RK7HfLjn9L5ub1qEoiyondy6SWyIqdvNDwbvoe1I0P6nt4j9CO2L2jfRYZtSscXM2vMjgq+Q/tr+APPTUBOsZgBnAAAAAElFTkSuQmCC">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+         :root {
+            --bg: #000;
+            --surface: #0d0d0d;
+            --border: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.2);
+            --text: #e8e6e0;
+            --muted: #555;
+            --accent: #fff;
+            --green: #23a559;
+            --red: #f23f43;
+            --yellow: #f0b232;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        /* ── Custom Cursor ── */
+        
+        * {
+            cursor: none !important;
+        }
+        
+        .cursor-dot {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 6px;
+            height: 6px;
+            background: #fff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 99999;
+            transform: translate(-50%, -50%);
+            transition: width 0.15s ease, height 0.15s ease, background 0.15s ease;
+        }
+        
+        .cursor-ring {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 32px;
+            height: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 99998;
+            transform: translate(-50%, -50%);
+            transition: width 0.25s ease, height 0.25s ease, border-color 0.25s ease, border-width 0.25s ease;
+        }
+        
+        .cursor-dot.hovering {
+            width: 10px;
+            height: 10px;
+            background: #fff;
+        }
+        
+        .cursor-ring.hovering {
+            width: 48px;
+            height: 48px;
+            border-color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .cursor-dot.clicking {
+            width: 4px;
+            height: 4px;
+        }
+        
+        .cursor-ring.clicking {
+            width: 24px;
+            height: 24px;
+        }
+        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        /* ── Canvas background ── */
+        
+        #netCanvas {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 30px;
+            position: relative;
+            z-index: 1;
+        }
+        /* ── Header ── */
+        
+        .header {
+            margin-bottom: 60px;
+        }
+        
+        .logo {
+            font-size: 13px;
+            color: var(--muted);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            opacity: 0;
+            animation: slideIn 0.6s ease 0.1s forwards;
+        }
+        
+        .title {
+            font-size: clamp(36px, 6vw, 64px);
+            font-weight: 700;
+            letter-spacing: -2px;
+            line-height: 1;
+            margin-bottom: 16px;
+            opacity: 0;
+            animation: slideIn 0.6s ease 0.2s forwards;
+        }
+        
+        .title span {
+            color: var(--muted);
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            color: var(--muted);
+            line-height: 1.6;
+            max-width: 500px;
+            opacity: 0;
+            animation: slideIn 0.6s ease 0.3s forwards;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        /* ── Search ── */
+        
+        .search-wrapper {
+            display: flex;
+            gap: 0;
+            margin-bottom: 50px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            background: var(--surface);
+            opacity: 0;
+            animation: slideIn 0.6s ease 0.4s forwards;
+            position: relative;
+        }
+        
+        .search-wrapper::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 8px;
+            opacity: 0;
+            background: radial-gradient(ellipse at var(--mx, 50%) 50%, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .search-wrapper:hover::after {
+            opacity: 1;
+        }
+        
+        .search-wrapper:focus-within {
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 30px rgba(255, 255, 255, 0.04);
+        }
+        
+        .search-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px;
+            padding: 16px 20px;
+            letter-spacing: 0.5px;
+        }
+        
+        .search-input::placeholder {
+            color: var(--muted);
+        }
+        
+        .search-btn {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 16px 28px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: opacity 0.2s ease, transform 0.1s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .search-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        
+        .search-btn:hover::after {
+            opacity: 1;
+        }
+        
+        .search-btn:active {
+            transform: scale(0.97);
+        }
+        
+        .search-btn:disabled {
+            opacity: 0.4;
+        }
+        
+        .own-ip-btn {
+            background: transparent;
+            color: var(--muted);
+            border: none;
+            padding: 16px 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            letter-spacing: 1px;
+            border-left: 1px solid var(--border);
+            transition: color 0.2s ease, background 0.2s ease;
+            white-space: nowrap;
+        }
+        
+        .own-ip-btn:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.03);
+        }
+        /* ── Scan line animation on input ── */
+        
+        .search-input:focus+.own-ip-btn,
+        .search-input:focus~.search-btn {
+            --active: 1;
+        }
+        /* ── Results ── */
+        
+        #results {
+            display: none;
+        }
+        
+        #results.visible {
+            display: block;
+            animation: fadeUp 0.5s ease;
+        }
+        
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        /* IP header bar */
+        
+        .result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px 8px 0 0;
+            border-bottom: none;
+            flex-wrap: wrap;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .result-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 60%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: scanHeader 2s ease forwards;
+        }
+        
+        @keyframes scanHeader {
+            to {
+                left: 150%;
+            }
+        }
+        
+        .result-ip {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .result-flag {
+            font-size: 28px;
+        }
+        
+        .result-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.4);
+            }
+            50% {
+                opacity: 0.6;
+                box-shadow: 0 0 0 5px rgba(35, 165, 89, 0);
+            }
+        }
+        /* Map */
+        
+        .map-container {
+            width: 100%;
+            height: 300px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        /* ── Leaflet zoom control override ── */
+        
+        .leaflet-control-zoom {
+            border: 1px solid var(--border) !important;
+            border-radius: 6px !important;
+            overflow: hidden;
+            box-shadow: none !important;
+        }
+        
+        .leaflet-control-zoom a {
+            background: #0d0d0d !important;
+            color: #888 !important;
+            border: none !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+            font-family: 'JetBrains Mono', monospace !important;
+            font-size: 16px !important;
+            font-weight: 300 !important;
+            width: 30px !important;
+            height: 30px !important;
+            line-height: 30px !important;
+            transition: background 0.15s, color 0.15s !important;
+        }
+        
+        .leaflet-control-zoom a:last-child {
+            border-bottom: none !important;
+        }
+        
+        .leaflet-control-zoom a:hover {
+            background: #1a1a1a !important;
+            color: #fff !important;
+        }
+        
+        .leaflet-popup-content-wrapper {
+            background: #0d0d0d !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 6px !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+            color: #e8e6e0 !important;
+        }
+        
+        .leaflet-popup-tip {
+            background: #0d0d0d !important;
+        }
+        
+        .leaflet-popup-close-button {
+            color: #555 !important;
+        }
+        
+        .leaflet-popup-close-button:hover {
+            color: #fff !important;
+        }
+        /* Grid of data cards */
+        
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: 0 0 8px 8px;
+            overflow: hidden;
+        }
+        
+        .data-cell {
+            background: var(--surface);
+            padding: 20px 24px;
+            transition: background 0.2s ease, transform 0.15s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .data-cell::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--cx, 50%) var(--cy, 50%), rgba(255, 255, 255, 0.04) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .data-cell:hover {
+            background: #111;
+        }
+        
+        .data-cell:hover::before {
+            opacity: 1;
+        }
+        
+        .data-label {
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        
+        .data-value {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text);
+            word-break: break-all;
+            line-height: 1.4;
+        }
+        
+        .data-value.none {
+            color: var(--muted);
+            font-style: italic;
+        }
+        /* ── Stagger-in cells ── */
+        
+        .data-cell {
+            opacity: 0;
+            animation: cellIn 0.4s ease forwards;
+        }
+        
+        .data-cell:nth-child(1) {
+            animation-delay: 0.05s;
+        }
+        
+        .data-cell:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+        
+        .data-cell:nth-child(3) {
+            animation-delay: 0.15s;
+        }
+        
+        .data-cell:nth-child(4) {
+            animation-delay: 0.2s;
+        }
+        
+        .data-cell:nth-child(5) {
+            animation-delay: 0.25s;
+        }
+        
+        .data-cell:nth-child(6) {
+            animation-delay: 0.3s;
+        }
+        
+        .data-cell:nth-child(7) {
+            animation-delay: 0.35s;
+        }
+        
+        .data-cell:nth-child(8) {
+            animation-delay: 0.4s;
+        }
+        
+        .data-cell:nth-child(9) {
+            animation-delay: 0.45s;
+        }
+        
+        .data-cell:nth-child(10) {
+            animation-delay: 0.5s;
+        }
+        
+        .data-cell:nth-child(11) {
+            animation-delay: 0.55s;
+        }
+        
+        .data-cell:nth-child(12) {
+            animation-delay: 0.6s;
+        }
+        
+        @keyframes cellIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        /* Tags */
+        
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+        
+        .tag.vpn {
+            background: rgba(242, 63, 67, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(242, 63, 67, 0.2);
+        }
+        
+        .tag.tor {
+            background: rgba(114, 76, 230, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(114, 76, 230, 0.2);
+        }
+        
+        .tag.proxy {
+            background: rgba(240, 178, 50, 0.15);
+            color: var(--yellow);
+            border: 1px solid rgba(240, 178, 50, 0.2);
+        }
+        
+        .tag.clean {
+            background: rgba(35, 165, 89, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(35, 165, 89, 0.2);
+        }
+        /* Coords copy */
+        
+        .coords-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .copy-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            transition: all 0.15s ease;
+        }
+        
+        .copy-btn:hover {
+            border-color: var(--border-hover);
+            color: var(--text);
+        }
+        /* Error */
+        
+        .error-box {
+            display: none;
+            padding: 20px 24px;
+            background: rgba(242, 63, 67, 0.08);
+            border: 1px solid rgba(242, 63, 67, 0.2);
+            border-radius: 8px;
+            color: var(--red);
+            font-size: 14px;
+            margin-bottom: 20px;
+            animation: fadeUp 0.3s ease;
+        }
+        
+        .error-box.visible {
+            display: block;
+        }
+        /* Loading */
+        
+        .loading {
+            display: none;
+            align-items: center;
+            gap: 16px;
+            padding: 30px 0;
+            color: var(--muted);
+            font-size: 13px;
+            letter-spacing: 1px;
+        }
+        
+        .loading.visible {
+            display: flex;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        /* ── Typing text placeholder ── */
+        
+        .search-input.typed-placeholder::placeholder {
+            color: var(--text);
+        }
+        /* Footer */
+        
+        .footer {
+            margin-top: 60px;
+            padding-top: 30px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--muted);
+            opacity: 0;
+            animation: slideIn 0.6s ease 0.6s forwards;
+        }
+        
+        .footer a {
+            color: var(--muted);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        
+        .footer a:hover {
+            color: var(--text);
+        }
+        /* ── Ripple on click ── */
+        
+        .ripple {
+            position: fixed;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%) scale(0);
+            animation: rippleOut 0.6s ease forwards;
+        }
+        
+        @keyframes rippleOut {
+            to {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 40px 20px;
+            }
+            .result-header {
+                flex-direction: column;
+            }
+            .search-wrapper {
+                flex-wrap: wrap;
+            }
+            .own-ip-btn {
+                border-left: none;
+                border-top: 1px solid var(--border);
+                width: 100%;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+</head>
+
+<body>
+
+    <!-- Custom cursor -->
+    <div class="cursor-dot" id="cursorDot"></div>
+    <div class="cursor-ring" id="cursorRing"></div>
+
+    <!-- Particle net canvas -->
+    <canvas id="netCanvas"></canvas>
+
+    <div class="container">
+        <div class="header">
+            <div class="logo">// GeoTrace v1.0</div>
+            <h1 class="title">IP <span>Geolocate.</span></h1>
+            <p class="subtitle">Approximate physical location, ISP, organization, and connection metadata for any IP address.</p>
+        </div>
+
+        <div class="search-wrapper" id="searchWrapper">
+            <input class="search-input" id="ipInput" type="text" placeholder="Enter IP address or domain..." autocomplete="off" spellcheck="false" />
+            <button class="own-ip-btn" id="myIpBtn" title="Look up your own IP">My IP</button>
+            <button class="search-btn" id="lookupBtn">Lookup →</button>
+        </div>
+
+        <div class="error-box" id="errorBox"></div>
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <span>Resolving...</span>
+        </div>
+
+        <div id="results">
+            <div class="result-header">
+                <div style="display:flex;align-items:center;gap:16px;">
+                    <span class="result-flag" id="rFlag"></span>
+                    <span class="result-ip" id="rIp"></span>
+                </div>
+                <div class="result-status">
+                    <div class="status-dot"></div>
+                    <span>Resolved</span>
+                </div>
+            </div>
+
+            <div class="map-container">
+                <div id="map"></div>
+            </div>
+
+            <div class="data-grid" id="dataGrid"></div>
+        </div>
+
+        <div class="footer">
+            <span>GeoTrace — by <a href="https://github.com/skullaf" target="_blank">skullaf</a></span>
+            <span>Powered by freeipapi.com · ip.guide · ipwho.is · ipapi.co · Data may not be 100% accurate</span>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        // ── Custom Cursor ────────────────────────────────────────────────────────────
+        const cursorDot = document.getElementById('cursorDot');
+        const cursorRing = document.getElementById('cursorRing');
+
+        let mouseX = 0,
+            mouseY = 0;
+        let ringX = 0,
+            ringY = 0;
+
+        document.addEventListener('mousemove', e => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            cursorDot.style.left = mouseX + 'px';
+            cursorDot.style.top = mouseY + 'px';
+        });
+
+        // Smooth lag on ring
+        function animateRing() {
+            ringX += (mouseX - ringX) * 0.12;
+            ringY += (mouseY - ringY) * 0.12;
+            cursorRing.style.left = ringX + 'px';
+            cursorRing.style.top = ringY + 'px';
+            requestAnimationFrame(animateRing);
+        }
+        animateRing();
+
+        document.addEventListener('mousedown', () => {
+            cursorDot.classList.add('clicking');
+            cursorRing.classList.add('clicking');
+            // Ripple
+            const r = document.createElement('div');
+            r.className = 'ripple';
+            r.style.left = mouseX + 'px';
+            r.style.top = mouseY + 'px';
+            r.style.width = '60px';
+            r.style.height = '60px';
+            document.body.appendChild(r);
+            setTimeout(() => r.remove(), 700);
+        });
+
+        document.addEventListener('mouseup', () => {
+            cursorDot.classList.remove('clicking');
+            cursorRing.classList.remove('clicking');
+        });
+
+        document.querySelectorAll('button, a, input, .data-cell, .copy-btn').forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                cursorDot.classList.add('hovering');
+                cursorRing.classList.add('hovering');
+            });
+            el.addEventListener('mouseleave', () => {
+                cursorDot.classList.remove('hovering');
+                cursorRing.classList.remove('hovering');
+            });
+        });
+
+        // ── Particle Net Background ──────────────────────────────────────────────────
+        const canvas = document.getElementById('netCanvas');
+        const ctx = canvas.getContext('2d');
+        const PARTICLE_COUNT = 80;
+        const CONNECT_DIST = 160;
+        const MOUSE_REPEL = 120;
+        const MOUSE_FORCE = 0.6;
+
+        let W, H, particles;
+
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        class Particle {
+            constructor() {
+                this.reset(true);
+            }
+            reset(init) {
+                this.x = Math.random() * W;
+                this.y = Math.random() * H;
+                this.vx = (Math.random() - 0.5) * 0.35;
+                this.vy = (Math.random() - 0.5) * 0.35;
+                this.r = Math.random() * 1.5 + 0.5;
+                this.alpha = Math.random() * 0.4 + 0.1;
+            }
+            update() {
+                // Mouse repulsion
+                const dx = this.x - mouseX;
+                const dy = this.y - mouseY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < MOUSE_REPEL) {
+                    const force = (MOUSE_REPEL - dist) / MOUSE_REPEL * MOUSE_FORCE;
+                    this.vx += (dx / dist) * force;
+                    this.vy += (dy / dist) * force;
+                }
+                // Dampen
+                this.vx *= 0.985;
+                this.vy *= 0.985;
+                this.x += this.vx;
+                this.y += this.vy;
+                // Wrap
+                if (this.x < 0) this.x = W;
+                if (this.x > W) this.x = 0;
+                if (this.y < 0) this.y = H;
+                if (this.y > H) this.y = 0;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255,255,255,${this.alpha})`;
+                ctx.fill();
+            }
+        }
+
+        particles = Array.from({
+            length: PARTICLE_COUNT
+        }, () => new Particle());
+
+        function drawNet() {
+            ctx.clearRect(0, 0, W, H);
+
+            // Connect particles
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const d = Math.sqrt(dx * dx + dy * dy);
+                    if (d < CONNECT_DIST) {
+                        const opacity = (1 - d / CONNECT_DIST) * 0.12;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
+                        ctx.lineWidth = 0.6;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // Connect to mouse (within range)
+            for (const p of particles) {
+                const dx = p.x - mouseX;
+                const dy = p.y - mouseY;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                const MD = CONNECT_DIST * 1.4;
+                if (d < MD) {
+                    const opacity = (1 - d / MD) * 0.2;
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(mouseX, mouseY);
+                    ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
+            }
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(drawNet);
+        }
+        drawNet();
+
+        // ── Search wrapper mouse glow ────────────────────────────────────────────────
+        const searchWrapper = document.getElementById('searchWrapper');
+        searchWrapper.addEventListener('mousemove', e => {
+            const rect = searchWrapper.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+            searchWrapper.style.setProperty('--mx', x + '%');
+        });
+
+        // ── Cell mouse glow ──────────────────────────────────────────────────────────
+        document.addEventListener('mousemove', e => {
+            document.querySelectorAll('.data-cell').forEach(cell => {
+                const rect = cell.getBoundingClientRect();
+                const cx = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+                const cy = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
+                cell.style.setProperty('--cx', cx + '%');
+                cell.style.setProperty('--cy', cy + '%');
+            });
+        });
+
+        // ── Main Logic ────────────────────────────────────────────────────────────────
+        const ipInput = document.getElementById('ipInput');
+        const lookupBtn = document.getElementById('lookupBtn');
+        const myIpBtn = document.getElementById('myIpBtn');
+        const errorBox = document.getElementById('errorBox');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const dataGrid = document.getElementById('dataGrid');
+
+        let leafletMap = null;
+        let mapMarker = null;
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.classList.add('visible');
+        }
+
+        function clearError() {
+            errorBox.textContent = '';
+            errorBox.classList.remove('visible');
+        }
+
+        function setLoading(on) {
+            loading.classList.toggle('visible', on);
+            lookupBtn.disabled = on;
+            myIpBtn.disabled = on;
+        }
+
+        function countryCodeToFlag(cc) {
+            if (!cc || cc.length !== 2) return '';
+            try {
+                const offset = 127397;
+                return [...cc.toUpperCase()].map(c => String.fromCodePoint(c.charCodeAt(0) + offset)).join('');
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function cell(label, value, extra = '') {
+            const isNone = !value || value === '' || value === 'null';
+            return `
+        <div class="data-cell">
+            <div class="data-label">${label}</div>
+            <div class="data-value${isNone ? ' none' : ''}">${isNone ? 'N/A' : value}</div>
+            ${extra}
+        </div>`;
+        }
+
+        function initMap(lat, lon, label) {
+            if (!leafletMap) {
+                leafletMap = L.map('map', {
+                    zoomControl: true,
+                    attributionControl: false,
+                    scrollWheelZoom: false,
+                }).setView([lat, lon], 10);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19
+                }).addTo(leafletMap);
+            } else {
+                leafletMap.setView([lat, lon], 10);
+            }
+            if (mapMarker) mapMarker.remove();
+            const icon = L.divIcon({
+                html: `<div style="width:14px;height:14px;background:#fff;border-radius:50%;border:3px solid rgba(255,255,255,0.3);box-shadow:0 0 20px rgba(255,255,255,0.6);"></div>`,
+                className: '',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7],
+            });
+            mapMarker = L.marker([lat, lon], {
+                    icon
+                }).addTo(leafletMap)
+                .bindPopup(`<b style="font-family:monospace;font-size:13px;">${label}</b>`).openPopup();
+            setTimeout(() => leafletMap.invalidateSize(), 100);
+        }
+
+        function renderResults(d) {
+            const flag = countryCodeToFlag(d.countryCode);
+            document.getElementById('rFlag').textContent = flag;
+            document.getElementById('rFlag').style.display = flag ? '' : 'none';
+            document.getElementById('rIp').textContent = d.query;
+
+            const coordStr = d.lat && d.lon ? `${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}` : null;
+            const coordExtra = coordStr ? `
+        <div class="coords-row" style="margin-top:8px;">
+            <button class="copy-btn" onclick="navigator.clipboard.writeText('${coordStr}');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+            <a href="https://www.google.com/maps?q=${d.lat},${d.lon}" target="_blank" style="font-size:11px;color:#555;text-decoration:none;transition:color .2s" onmouseover="this.style.color='#aaa'" onmouseout="this.style.color='#555'">Open Maps ↗</a>
+        </div>` : '';
+
+            let proxyTags = '';
+            if (d.proxy) proxyTags += `<span class="tag proxy">Proxy</span> `;
+            if (d.hosting) proxyTags += `<span class="tag vpn">Hosting / VPN</span> `;
+            if (d.mobile) proxyTags += `<span class="tag clean">Mobile Network</span>`;
+            if (!d.proxy && !d.hosting && !d.mobile) proxyTags = `<span class="tag clean">Clean</span>`;
+            const proxyExtra = `<div style="margin-top:6px;">${proxyTags}</div>`;
+
+            dataGrid.innerHTML = `
+        ${cell('IP Address', d.query)}
+        ${cell('Country', d.country ? (flag ? `${flag} ${d.country}` : d.country) : null)}
+        ${cell('Region', d.regionName || d.region)}
+        ${cell('City', d.city)}
+        ${cell('ZIP / Postal', d.zip)}
+        ${cell('Timezone', d.timezone)}
+        ${cell('Coordinates', coordStr, coordExtra)}
+        ${cell('ISP', d.isp)}
+        ${cell('Organization', d.org)}
+        ${cell('AS Number', d.as)}
+        ${cell('Connection Type', d.mobile ? 'Mobile' : d.proxy ? 'Proxy/VPN' : 'Broadband/Fiber')}
+        <div class="data-cell">
+            <div class="data-label">Connection Flags</div>
+            <div class="data-value" style="padding-top:2px;">${proxyExtra}</div>
+        </div>
+    `;
+
+    results.classList.add('visible');
+
+    // Re-add hover listeners for new cells
+    document.querySelectorAll('.data-cell, .copy-btn').forEach(el => {
+        el.addEventListener('mouseenter', () => { cursorDot.classList.add('hovering'); cursorRing.classList.add('hovering'); });
+        el.addEventListener('mouseleave', () => { cursorDot.classList.remove('hovering'); cursorRing.classList.remove('hovering'); });
+    });
+
+    if (d.lat && d.lon) initMap(d.lat, d.lon, `${d.city || ''}, ${d.country || d.query}`);
+}
+
+async function tryFetch(url, normalize) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const raw = await res.json();
+    return normalize(raw);
+}
+
+// Helper: return first non-null/empty value
+function best(...vals) {
+    for (const v of vals) {
+        if (v !== null && v !== undefined && v !== '' && v !== 'null') return v;
+    }
+    return null;
+}
+
+function normalizeFreeiPAPI(r) {
+    return {
+        query:       r.ipAddress       || null,
+        country:     r.countryName     || null,
+        countryCode: r.countryCode     || null,
+        regionName:  r.regionName      || null,
+        city:        r.cityName        || null,
+        zip:         r.zipCode         || null,
+        lat:         r.latitude        || null,
+        lon:         r.longitude       || null,
+        timezone:    r.timeZone        || null,
+        isp:         r.isp             || null,
+        org:         r.isp             || null,
+        as:          null,
+        proxy:       false, hosting: false, mobile: false,
+    };
+}
+
+function normalizeIPGuide(r) {
+    return {
+        query:       r.ip                                 || null,
+        country:     r.location?.country_name             || null,
+        countryCode: r.location?.country                  || null,
+        regionName:  r.location?.state                    || null,
+        city:        r.location?.city                     || null,
+        zip:         r.location?.zip                      || null,
+        lat:         r.location?.latitude                 || null,
+        lon:         r.location?.longitude                || null,
+        timezone:    r.location?.timezone                 || null,
+        isp:         r.network?.organization              || null,
+        org:         r.network?.organization              || null,
+        as:          r.network?.autonomous_system?.asn
+                       ? `AS${r.network.autonomous_system.asn}` : null,
+        proxy: false, hosting: false, mobile: false,
+    };
+}
+
+function normalizeIPWhoIs(r) {
+    if (r.success === false) throw new Error(r.message || 'Lookup failed');
+    return {
+        query:       r.ip                              || null,
+        country:     r.country                        || null,
+        countryCode: r.country_code                   || null,
+        regionName:  r.region                         || null,
+        city:        r.city                           || null,
+        zip:         r.postal                         || null,
+        lat:         r.latitude                       || null,
+        lon:         r.longitude                      || null,
+        timezone:    r.timezone?.id || r.timezone     || null,
+        isp:         r.connection?.isp                || null,
+        org:         r.connection?.org                || null,
+        as:          r.connection?.asn
+                       ? `AS${r.connection.asn}`      : null,
+        proxy:   r.security?.proxy   || false,
+        hosting: r.security?.hosting || false,
+        mobile:  r.type === 'mobile' || false,
+    };
+}
+
+// Additional reliable fallback: ipapi.co
+function normalizeIPApiCo(r) {
+    if (r.error) throw new Error(r.reason || 'Lookup failed');
+    return {
+        query:       r.ip              || null,
+        country:     r.country_name    || null,
+        countryCode: r.country_code    || null,
+        regionName:  r.region          || null,
+        city:        r.city            || null,
+        zip:         r.postal          || null,
+        lat:         r.latitude        || null,
+        lon:         r.longitude       || null,
+        timezone:    r.timezone        || null,
+        isp:         r.org             || null,
+        org:         r.org             || null,
+        as:          r.asn             || null,
+        proxy: false, hosting: false, mobile: false,
+    };
+}
+
+async function safeFetch(url, normalize) {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const raw = await res.json();
+        return normalize(raw);
+    } catch (e) { return null; }
+}
+
+async function lookupIP(ip) {
+    clearError();
+    results.classList.remove('visible');
+    setLoading(true);
+
+    const param = ip || '';
+
+    // Fire all APIs in parallel
+    const [a, b, c, d] = await Promise.all([
+        safeFetch(
+            param ? `https://freeipapi.com/api/json/${param}` : `https://freeipapi.com/api/json`,
+            normalizeFreeiPAPI
+        ),
+        safeFetch(
+            param ? `https://ip.guide/${param}` : `https://ip.guide/`,
+            normalizeIPGuide
+        ),
+        safeFetch(
+            param ? `https://ipwho.is/${param}` : `https://ipwho.is/`,
+            normalizeIPWhoIs
+        ),
+        safeFetch(
+            param ? `https://ipapi.co/${param}/json/` : `https://ipapi.co/json/`,
+            normalizeIPApiCo
+        ),
+    ]);
+
+    const sources = [a, b, c, d].filter(Boolean);
+
+    if (sources.length === 0) {
+        setLoading(false);
+        showError('All lookup sources failed. Check your connection or try again.');
+        return;
+    }
+
+    // Merge: pick best non-null value for each field across all sources
+    const merged = {
+        query:       best(...sources.map(s => s.query)),
+        country:     best(...sources.map(s => s.country)),
+        countryCode: best(...sources.map(s => s.countryCode)),
+        regionName:  best(...sources.map(s => s.regionName)),
+        city:        best(...sources.map(s => s.city)),
+        zip:         best(...sources.map(s => s.zip)),
+        lat:         best(...sources.map(s => s.lat)),
+        lon:         best(...sources.map(s => s.lon)),
+        timezone:    best(...sources.map(s => s.timezone)),
+        isp:         best(...sources.map(s => s.isp)),
+        org:         best(...sources.map(s => s.org)),
+        as:          best(...sources.map(s => s.as)),
+        proxy:       sources.some(s => s.proxy),
+        hosting:     sources.some(s => s.hosting),
+        mobile:      sources.some(s => s.mobile),
+    };
+
+    if (!merged.query) {
+        setLoading(false);
+        showError('Could not resolve the IP address. Please check and try again.');
+        return;
+    }
+
+    renderResults(merged);
+    setLoading(false);
+}
+
+lookupBtn.addEventListener('click', () => {
+    const val = ipInput.value.trim();
+    if (!val) { showError('Please enter an IP address or domain.'); return; }
+    lookupIP(val);
+});
+
+myIpBtn.addEventListener('click', () => lookupIP(''));
+
+ipInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') lookupBtn.click();
+});
+
+// ── Typing placeholder animation ─────────────────────────────────────────────
+const placeholders = [
+    '8.8.8.8',
+    '1.1.1.1',
+    'example.com',
+    '142.250.74.46',
+];
+let pIdx = 0, pChar = 0, pDeleting = false;
+
+function typePlaceholder() {
+    const target = placeholders[pIdx];
+    if (!pDeleting) {
+        pChar++;
+        ipInput.placeholder = target.slice(0, pChar);
+        if (pChar === target.length) {
+            pDeleting = true;
+            setTimeout(typePlaceholder, 1800);
+        } else {
+            setTimeout(typePlaceholder, 90);
+        }
+    } else {
+        pChar--;
+        ipInput.placeholder = target.slice(0, pChar);
+        if (pChar === 0) {
+            pDeleting = false;
+            pIdx = (pIdx + 1) % placeholders.length;
+            setTimeout(typePlaceholder, 400);
+        } else {
+            setTimeout(typePlaceholder, 50);
+        }
+    }
+}
+// Start typing animation after a small delay
+setTimeout(typePlaceholder, 1000);
+    </script>
+</body>
+
+</html>
